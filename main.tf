@@ -4,27 +4,15 @@ provider "aws" {
 
 provider "kubernetes" {
     host = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate.authority_data)
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
 
     exec {
-        api_version = "client.authentication.k8s.io.v1beta1"
-        command = "aws"
-        args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-    }
-}
-
-provider "helm" {
-    kubernetes = {
-      host = module.eks.cluster_endpoint
-      cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate_authority_data)
-
-      exec = {
         api_version = "client.authentication.k8s.io/v1beta1"
         command = "aws"
         args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-      }
     }
 }
+
 
 data "aws_availability_zones" "available" {
     filter {
@@ -52,7 +40,7 @@ locals {
 
 module "eks" {
   source = "terraform-aws-modules/eks/aws"
-  version = "~21.0"
+  version = ">=21.0"
 
     name    = local.name
     kubernetes_version = "1.33"
