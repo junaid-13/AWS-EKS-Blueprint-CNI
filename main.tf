@@ -1,37 +1,37 @@
 provider "aws" {
-    region = local.region
+  region = local.region
 }
 
 provider "kubernetes" {
-    host = module.eks.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
 
-    exec {
-        api_version = "client.authentication.k8s.io/v1beta1"
-        command = "aws"
-        args = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-    }
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+  }
 }
 
 
 data "aws_availability_zones" "available" {
-    filter {
-      name = "opt-in-status"
-      values = ["opt-in-not-required"]
-    }
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
 }
 
 locals {
-    name = basename(path.cwd)
-    region = "us-east-1"
+  name   = basename(path.cwd)
+  region = "us-east-1"
 
-    vpc_cidr = "10.0.0.0/16"
-    azs = slice(data.aws_availability_zones.available.names, 0, 3)
+  vpc_cidr = "10.0.0.0/16"
+  azs      = slice(data.aws_availability_zones.available.names, 0, 3)
 
-    tags = {
-        Blueprint = local.name
-        GithubRepo = "github.com/junaid-13/AWS-EKS-Blueprint-CNI"
-    }
+  tags = {
+    Blueprint  = local.name
+    GithubRepo = "github.com/junaid-13/AWS-EKS-Blueprint-CNI"
+  }
 }
 
 ##########################################
@@ -39,26 +39,26 @@ locals {
 ##########################################
 
 module "eks" {
-  source = "terraform-aws-modules/eks/aws"
+  source  = "terraform-aws-modules/eks/aws"
   version = ">=21.0"
 
-    name    = local.name
-    kubernetes_version = "1.33"
-    endpoint_public_access = true
+  name                   = local.name
+  kubernetes_version     = "1.33"
+  endpoint_public_access = true
 
-    enable_cluster_creator_admin_permissions = true
-    vpc_id = module.vpc.vpc_id
-    subnet_ids = module.vpc.private_subnets
+  enable_cluster_creator_admin_permissions = true
+  vpc_id                                   = module.vpc.vpc_id
+  subnet_ids                               = module.vpc.private_subnets
 
-    eks_managed_node_groups = {
-        initial = {
-            instance_types = ["t3.medium"]
-            min_size = 1
-            max_size = 10
-            desired_size = 2
-        }
+  eks_managed_node_groups = {
+    initial = {
+      instance_types = ["t3.medium"]
+      min_size       = 1
+      max_size       = 10
+      desired_size   = 2
     }
-    tags = local.tags
+  }
+  tags = local.tags
 }
 
 ##########################################
@@ -66,39 +66,39 @@ module "eks" {
 ##########################################
 
 module "Addons" {
-  source = "aws-ia/eks-blueprints-addons/aws"
-  version = "~>1.16"
+  source  = "aws-ia/eks-blueprints-addons/aws"
+  version = "~>1.23"
 
-  cluster_name = module.eks.cluster_name
-  cluster_endpoint = module.eks.cluster_endpoint
-  cluster_version = module.eks.cluster_version
+  cluster_name      = module.eks.cluster_name
+  cluster_endpoint  = module.eks.cluster_endpoint
+  cluster_version   = module.eks.cluster_version
   oidc_provider_arn = module.eks.oidc_provider_arn
 
   eks_addons = {
-    coredns = {}
+    coredns    = {}
     kube-proxy = {}
     vpc-cni = {
-        most_recent = true
+      most_recent = true
 
-        timeouts = {
-            create = "25m"
-            delete = "15m"
-        }
+      timeouts = {
+        create = "25m"
+        delete = "15m"
+      }
 
-        configuration_values = jsonencode({
-            enableNetworkPolicy = true
-        })
+      configuration_values = jsonencode({
+        enableNetworkPolicy = true
+      })
     }
   }
-    helm_releases = {
-        demo-application = {
-            description = "A demo application to test the CNI network policies"
-            namespace = "default"
-            chart = "./charts/demo-application"
-            
-        }
+  helm_releases = {
+    demo-application = {
+      description = "A demo application to test the CNI network policies"
+      namespace   = "default"
+      chart       = "./charts/demo-application"
+
     }
-    tags = local.tags
+  }
+  tags = local.tags
 }
 
 ##########################################
@@ -108,39 +108,39 @@ module "Addons" {
 # Block all ingress and egress traffic within stars namespace
 resource "kubernetes_network_policy_v1" "default_deny_stars" {
   metadata {
-  name = "default-deny"
-  namespace = "stars"
+    name      = "default-deny"
+    namespace = "stars"
   }
   spec {
     policy_types = ["Ingress"]
     pod_selector {
-        match_labels = {}
+      match_labels = {}
     }
   }
-  depends_on = [ module.Addons ]
+  depends_on = [module.Addons]
 }
 
 # Block all ingress and egress traffic within the client namespace
 resource "kubernetes_network_policy_v1" "default_deny_client" {
   metadata {
-    name = "default-deny"
+    name      = "default-deny"
     namespace = "client"
   }
   spec {
     policy_types = ["Ingress"]
     pod_selector {
       match_labels = {
-        
+
       }
     }
   }
-    depends_on = [module.Addons ]
+  depends_on = [module.Addons]
 }
 
 # Allow the management-ui to access the star application pods
 resource "kubernetes_network_policy_v1" "allow_ui_to_stars" {
   metadata {
-    name = "allow-ui"
+    name      = "allow-ui"
     namespace = "stars"
   }
   spec {
@@ -158,13 +158,13 @@ resource "kubernetes_network_policy_v1" "allow_ui_to_stars" {
       }
     }
   }
-  depends_on = [ module.Addons ]
+  depends_on = [module.Addons]
 }
 
 # Allow the management-ui to access the client application pods
 resource "kubernetes_network_policy_v1" "allow_ui_to_client" {
   metadata {
-    name = "allow-ui"
+    name      = "allow-ui"
     namespace = "client"
   }
   spec {
@@ -173,23 +173,23 @@ resource "kubernetes_network_policy_v1" "allow_ui_to_client" {
       match_labels = {
       }
     }
-      ingress{
-        from{
-            namespace_selector{
-                match_labels = {
-                    role = "management-ui"
-            }
+    ingress {
+      from {
+        namespace_selector {
+          match_labels = {
+            role = "management-ui"
+          }
         }
       }
     }
   }
-  depends_on = [ module.Addons ]
+  depends_on = [module.Addons]
 }
 
 # Allow the frontend pod to access the backend pod within the stars namespace
 resource "kubernetes_network_policy_v1" "allow_frontend_to_backend" {
   metadata {
-    name = "backend-policy"
+    name      = "backend-policy"
     namespace = "stars"
   }
   spec {
@@ -209,17 +209,17 @@ resource "kubernetes_network_policy_v1" "allow_frontend_to_backend" {
       }
       ports {
         protocol = "TCP"
-        port = "6379"
+        port     = "6379"
       }
     }
   }
-  depends_on = [ module.Addons ]
+  depends_on = [module.Addons]
 }
 
 # Allow the client pod to access the frontend pod within the stars namespace
 resource "kubernetes_network_policy_v1" "allow_client_to_backend" {
   metadata {
-    name = "frontend-policy"
+    name      = "frontend-policy"
     namespace = "stars"
   }
 
@@ -240,11 +240,11 @@ resource "kubernetes_network_policy_v1" "allow_client_to_backend" {
       }
       ports {
         protocol = "TCP"
-        port = "80"
+        port     = "80"
       }
     }
   }
-  depends_on = [ module.Addons ]
+  depends_on = [module.Addons]
 }
 
 ##########################################
@@ -252,24 +252,24 @@ resource "kubernetes_network_policy_v1" "allow_client_to_backend" {
 ##########################################
 
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-    name = local.name
-    cidr = local.vpc_cidr
-    azs = local.azs
-    private_subnets = [for k,v in local.azs : cidrsubnet(local.vpc_cidr, 4, k)]
-    public_subnets = [for k,v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
+  name            = local.name
+  cidr            = local.vpc_cidr
+  azs             = local.azs
+  private_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 4, k)]
+  public_subnets  = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k + 48)]
 
-    enable_nat_gateway = true
-    single_nat_gateway = true
+  enable_nat_gateway = true
+  single_nat_gateway = true
 
-    public_subnet_tags = {
-        "kubernetes.io/role/elb" = "1"
-    }
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = "1"
+  }
 
-    private_subnet_tags = {
-        "kubernetes.io/role/internal-elb" = "1"
-    }
-    tags = local.tags
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = "1"
+  }
+  tags = local.tags
 }
