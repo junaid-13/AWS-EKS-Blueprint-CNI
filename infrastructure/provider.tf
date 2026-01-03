@@ -3,8 +3,9 @@ provider "aws" {
 }
 
 provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  host                   = module.eks.this.cluster_endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
+  token = data.aws_eks_cluster.this.token
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
@@ -24,4 +25,12 @@ locals {
     Blueprint  = local.name
     GithubRepo = "github.com/junaid-13/AWS-EKS-Blueprint-CNI"
   }
+}
+
+data "aws_eks_cluster" "this" {
+  name = module.eks.cluster_name
+}
+
+data "aws_eks_cluster_auth" "this" {
+  name = module.eks.cluster_name
 }
