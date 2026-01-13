@@ -12,3 +12,8 @@ module "vpc" {
 module "eks" {
   source = "./modules/eks"
 }
+
+module "eks-policies" {
+  source = "./modules/eks-policies"
+  depends_on = [ module.eks ]
+}
